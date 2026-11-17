@@ -1,0 +1,156 @@
+/* مختبر الفيديو — أنماط خفيفة متوافقة مع Chromium 79+ (متصفح Tesla MCU2)
+   تجنّبنا عمدًا: backdrop-filter، flex gap، aspect-ratio، inset، :is()، dvh
+   لأنها إما غير مدعومة في الإصدارات القديمة أو مكلفة على معالج الرسوميات. */
+:root{
+  --bg:#0d0f12; --bg2:#15181d; --bg3:#1d2128; --line:#2a2f38;
+  --fg:#eef1f5; --fg2:#a4abb7; --fg3:#6f7784;
+  --accent:#3e6ae1; --accent2:#5b82ee; --ok:#2fb36b; --warn:#e8a33c; --bad:#e5484d;
+  --r:14px; --tap:56px; --vh:1vh;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg)}
+body{font:17px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Arabic","Noto Sans",Tahoma,Arial,sans-serif;
+  -webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+[hidden]{display:none!important}
+svg{width:24px;height:24px;fill:currentColor;flex:none}
+.muted{color:var(--fg2)} .small{font-size:14px}
+h3{font-size:15px;color:var(--fg2);margin:18px 0 8px;font-weight:600}
+
+/* ---------- الهيكل ---------- */
+.app{display:flex;flex-direction:column;height:calc(var(--vh) * 100)}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid var(--line);flex:none}
+.brand{display:flex;align-items:center}
+.logo{width:40px;height:40px;border-radius:11px;background:var(--accent);display:flex;align-items:center;justify-content:center;margin-left:12px}
+.title{font-weight:700;font-size:19px}
+.sub{color:var(--fg3);font-size:13px}
+.tag{display:inline-block;font-size:12px;font-weight:600;background:#3a2a10;color:var(--warn);border-radius:6px;padding:1px 8px;margin-right:6px;vertical-align:2px}
+.chips{display:flex;flex-wrap:wrap;justify-content:flex-end}
+.chip{font-size:13px;background:var(--bg3);border:1px solid var(--line);border-radius:999px;padding:4px 12px;margin:3px 6px 3px 0;white-space:nowrap;color:var(--fg2)}
+.chip.ok{color:var(--ok);border-color:#1f5b3c} .chip.warn{color:var(--warn);border-color:#5d4519} .chip.bad{color:var(--bad);border-color:#6b2427}
+
+.layout{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 400px;grid-gap:16px;padding:16px}
+.stage{display:flex;flex-direction:column;min-height:0;min-width:0}
+.side{min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+
+/* ---------- المشغّل ---------- */
+.player-box{position:relative;flex:1;min-height:240px;background:#000;border-radius:var(--r);overflow:hidden;contain:strict}
+.player-box iframe,#player{position:absolute;top:0;left:0;width:100%;height:100%;border:0}
+.placeholder{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;color:var(--fg2)}
+.placeholder p{margin:6px 0}
+.ph-icon{width:88px;height:88px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;margin-bottom:12px}
+.ph-icon svg{width:44px;height:44px;color:var(--fg3)}
+.buffering{position:absolute;top:14px;right:14px;display:flex;align-items:center;background:rgba(0,0,0,.72);border-radius:999px;padding:6px 14px 6px 12px;font-size:14px;pointer-events:none}
+.spinner{width:18px;height:18px;border-radius:50%;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;margin-left:8px;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- أدوات التحكم (أهداف لمس كبيرة ≥ 56px) ---------- */
+.controls{flex:none;margin-top:12px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:10px 14px}
+.seek-row{display:flex;align-items:center;direction:ltr}
+.time{font-variant-numeric:tabular-nums;font-size:14px;color:var(--fg2);min-width:58px;text-align:center}
+input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;flex:1;height:36px;margin:0 8px}
+input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:var(--line)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;background:var(--fg);margin-top:-9px;border:0}
+input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:var(--line)}
+input[type=range]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;background:var(--fg);border:0}
+input[type=range]:disabled{opacity:.4}
+.btn-row{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;direction:ltr;margin-top:4px}
+.cbtn{height:var(--tap);min-width:var(--tap);border:0;border-radius:12px;background:var(--bg3);margin:4px;display:inline-flex;align-items:center;justify-content:center;padding:0 12px}
+.cbtn span{font-size:13px;margin-left:2px;color:var(--fg2)}
+.cbtn.main{background:var(--accent);min-width:84px}
+.cbtn.main svg{width:32px;height:32px}
+.cbtn:active,.btn:active{transform:scale(.96)}
+.cbtn:disabled{opacity:.35;cursor:default}
+.csel{height:var(--tap);border:0;border-radius:12px;background:var(--bg3);margin:4px;padding:0 12px;min-width:84px}
+.sep{width:10px}
+
+/* ---------- عناصر عامة ---------- */
+.btn{border:0;border-radius:12px;padding:0 20px;height:52px;background:var(--bg3);font-weight:600}
+.btn.primary{background:var(--accent);color:#fff}
+.btn.primary:disabled{background:#2b3446;color:var(--fg3);cursor:not-allowed}
+.btn.ghost{background:transparent;border:1px solid var(--line)}
+.btn.sm{height:44px;font-size:15px;padding:0 14px;margin:4px 0 4px 6px}
+.btn.lg{height:60px;font-size:18px;padding:0 28px}
+.url-form{display:flex}
+.url-form input{flex:1;min-width:0;height:56px;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:0 14px;margin-left:8px;font-size:16px}
+.url-form input:focus{outline:2px solid var(--accent);outline-offset:0;border-color:transparent}
+.paste-row{margin-top:4px}
+
+.tabs{display:flex;margin:12px 0 6px;border-bottom:1px solid var(--line)}
+.tab{flex:1;height:50px;background:none;border:0;border-bottom:3px solid transparent;color:var(--fg2);font-weight:600;font-size:15px}
+.tab.active{color:var(--fg);border-bottom-color:var(--accent)}
+.panel{display:none;padding-top:8px}
+.panel.active{display:block}
+
+.vlist{list-style:none;margin:0;padding:0}
+.vitem{display:flex;align-items:center;padding:8px;border-radius:12px;margin-bottom:6px;background:var(--bg3);cursor:pointer;min-height:72px}
+.vitem:active{background:#262b34}
+.vitem.current{outline:2px solid var(--accent)}
+.thumb{width:112px;height:63px;border-radius:8px;background:#000 center/cover no-repeat;flex:none;margin-left:12px}
+.vmeta{min-width:0}
+.vtitle{font-weight:600;font-size:15px;line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.vnote{font-size:13px;color:var(--fg3)}
+.empty{text-align:center;padding:16px 0}
+
+.kv{display:grid;grid-template-columns:auto 1fr;grid-gap:4px 12px;margin:0;font-size:14px}
+.kv dt{color:var(--fg3)} .kv dd{margin:0;word-break:break-word;font-variant-numeric:tabular-nums;unicode-bidi:plaintext;text-align:right}
+.feat{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;grid-gap:2px 10px;font-size:14px}
+.feat .y{color:var(--ok)} .feat .n{color:var(--bad)}
+.diag-actions{margin-top:10px}
+textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;margin-top:8px}
+.log{margin:0;padding:0 18px 0 0;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;color:var(--fg2);max-height:220px;overflow-y:auto;list-style:none;padding:0}
+.log li{border-bottom:1px solid #1b1f25;padding:2px 0}
+.log .e{color:var(--bad)} .log .w{color:var(--warn)}
+
+.setting{margin:10px 0 14px}
+.setting label{display:block;margin-bottom:6px}
+.setting select{width:100%;height:52px;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:0 12px}
+.setting input[type=range]{width:100%;margin:0}
+.hint{font-size:13px;color:var(--fg3);margin:6px 0 0}
+.toggle,.check{display:flex;align-items:flex-start;padding:10px 0;cursor:pointer}
+.toggle input,.check input{width:26px;height:26px;margin:2px 0 0 12px;flex:none;accent-color:var(--accent)}
+hr{border:0;border-top:1px solid var(--line);margin:16px 0}
+
+/* ---------- النوافذ ---------- */
+.modal{position:fixed;top:0;left:0;right:0;bottom:0;z-index:50;background:rgba(5,6,8,.92);display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto}
+.modal-card{background:var(--bg2);border:1px solid var(--line);border-radius:18px;max-width:760px;width:100%;padding:28px 32px;max-height:100%;overflow-y:auto}
+.modal-card.center{text-align:center;max-width:520px}
+.modal-card h1{font-size:26px;margin:10px 0 12px}
+.modal-card p{margin:0 0 12px}
+.warn-badge{display:inline-block;background:#3a2a10;color:var(--warn);font-weight:700;border-radius:8px;padding:4px 12px}
+.dz-list{padding-right:20px;margin:0 0 14px}
+.dz-list li{margin-bottom:6px}
+.check{background:var(--bg3);border-radius:12px;padding:14px;margin-bottom:10px}
+.modal-actions{display:flex;flex-wrap:wrap;margin:16px 0 8px}
+.modal-actions .btn{margin:0 0 8px 10px}
+.big-icon{font-size:56px}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translate(-50%,20px);background:#2a2f38;color:var(--fg);padding:12px 22px;border-radius:12px;font-size:15px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:60;max-width:90vw}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ---------- وضع المسرح (ملء الشاشة داخل الصفحة) ---------- */
+.app.theater .topbar,.app.theater .side{display:none}
+.app.theater .layout{grid-template-columns:1fr;padding:0;grid-gap:0}
+.app.theater .player-box{border-radius:0}
+.app.theater .controls{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);margin:0;z-index:20;background:rgba(21,24,29,.94);width:min(980px,96vw);transition:opacity .25s}
+.app.theater.idle .controls{opacity:0;pointer-events:none}
+
+/* ---------- الوضع الخفيف ---------- */
+.lite .thumb{display:none}
+.lite *,.lite *::before,.lite *::after{transition:none!important;animation-duration:0s!important}
+.lite .spinner{animation:spin .8s linear infinite!important}
+
+/* ---------- شاشات أضيق / عمودية (Model S/X القديمة 1200×1920) ---------- */
+@media (max-width:980px){
+  body{overflow:auto}
+  .app{height:auto;min-height:calc(var(--vh) * 100)}
+  .layout{grid-template-columns:1fr}
+  .player-box{flex:none;height:0;padding-top:56.25%;min-height:0}
+  .side{overflow:visible}
+  .chips{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* المسرح يغلب تخطيط الشاشات الضيقة */
+.app.theater{height:calc(var(--vh) * 100);min-height:0}
+.app.theater .player-box{flex:1;height:auto;padding-top:0}
