@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>مختبر الفيديو — Tesla Browser Video Lab</title>
+<meta name="description" content="نموذج تجريبي لاختبار أداء تشغيل فيديوهات YouTube عبر متصفح سيارات Tesla. للاختبار التقني فقط والسيارة في وضع الوقوف (P).">
+<meta name="theme-color" content="#0d0f12">
+<meta name="color-scheme" content="dark">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%233e6ae1'/%3E%3Cpath d='M25 19v26l21-13z' fill='%23fff'/%3E%3C/svg%3E">
+
+<!-- تسخين الاتصالات مبكرًا: يوفّر مئات الملّي ثانية من DNS/TLS قبل أول تشغيل -->
+<link rel="preconnect" href="https://www.youtube.com">
+<link rel="preconnect" href="https://www.google.com">
+<link rel="preconnect" href="https://i.ytimg.com">
+<link rel="preconnect" href="https://s.ytimg.com">
+<link rel="dns-prefetch" href="https://www.youtube-nocookie.com">
+<link rel="dns-prefetch" href="https://yt3.ggpht.com">
+
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/></symbol>
+  <symbol id="i-fwd" viewBox="0 0 24 24"><path d="M12 5V1l5 5-5 5V7a6 6 0 1 0 6 6h2a8 8 0 1 1-8-8z"/></symbol>
+  <symbol id="i-vol" viewBox="0 0 24 24"><path d="M4 9v6h4l5 5V4L8 9zm12.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/></symbol>
+  <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9v6h4l5 5V4L8 9zm15.6 3 2.1-2.1-1.4-1.4-2.1 2.1-2.1-2.1-1.4 1.4 2.1 2.1-2.1 2.1 1.4 1.4 2.1-2.1 2.1 2.1 1.4-1.4z"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 4h6v2H6v4H4zm10 0h6v6h-2V6h-4zM4 14h2v4h4v2H4zm14 0h2v6h-6v-2h4z"/></symbol>
+  <symbol id="i-shrink" viewBox="0 0 24 24"><path d="M8 4h2v6H4V8h4zm6 0h2v4h4v2h-6zM4 14h6v6H8v-4H4zm10 0h6v2h-4v4h-2z"/></symbol>
+  <symbol id="i-reload" viewBox="0 0 24 24"><path d="M17.6 6.4A8 8 0 1 0 20 12h-2a6 6 0 1 1-1.8-4.2L13 11h7V4z"/></symbol>
+</svg>
+
+<!-- ============ نافذة إخلاء المسؤولية ============ -->
+<div id="disclaimer" class="modal" role="dialog" aria-modal="true" aria-labelledby="dz-title" hidden>
+  <div class="modal-card">
+    <div class="warn-badge">⚠ للأغراض التجريبية فقط</div>
+    <h1 id="dz-title">إخلاء مسؤولية وتنبيه سلامة</h1>
+    <p>هذا الموقع <strong>نموذج أولي تجريبي</strong> مخصّص للبحث والاختبار التقني لأداء تشغيل فيديوهات YouTube داخل متصفح السيارة. ليس منتجًا تجاريًا، ولا يرتبط بشركة Tesla أو YouTube أو Google ولا تعتمده أيٌّ منها.</p>
+    <ul class="dz-list">
+      <li><strong>مشاهدة الفيديو أثناء القيادة خطرة</strong> وقد تكون مخالفة للأنظمة المرورية، وقد تؤدي إلى حوادث وإصابات.</li>
+      <li>أي اختبار تشغيل يجب أن يتم <strong>والسيارة متوقفة تمامًا وناقل الحركة في وضع الوقوف (P)</strong>.</li>
+      <li>يُعرض الفيديو عبر مشغل YouTube الرسمي المضمّن ويخضع لشروط خدمة YouTube.</li>
+      <li>الإعدادات والسجل تُحفظ محليًا في متصفحك فقط، ولا تُرسَل إلى أي خادم خاص بالموقع.</li>
+      <li>الموقع مقدَّم «كما هو» دون أي ضمان، ويتحمّل المستخدم وحده مسؤولية الاستخدام.</li>
+    </ul>
+    <label class="check"><input type="checkbox" id="dz-c1"> <span>أفهم أن هذا الموقع تجريبي ومخصّص للاختبار التقني فقط، وأقبل استخدامه على مسؤوليتي.</span></label>
+    <label class="check"><input type="checkbox" id="dz-c2"> <span>أتعهّد بعدم تشغيل أو مشاهدة أي فيديو إلا والسيارة متوقفة وفي وضع الوقوف (P)، وأدرك أن المشاهدة أثناء القيادة تشكّل خطرًا.</span></label>
+    <div class="modal-actions">
+      <button id="dz-accept" class="btn primary lg" disabled>موافق — متابعة</button>
+      <button id="dz-leave" class="btn ghost lg">خروج</button>
+    </div>
+    <p class="muted small">ستظهر هذه النافذة مجددًا في كل جلسة تصفّح جديدة.</p>
+  </div>
+</div>
+
+<!-- ============ حاجب الحركة (اختياري) ============ -->
+<div id="motion-block" class="modal" hidden>
+  <div class="modal-card center">
+    <div class="big-icon">⛔</div>
+    <h2>تم إيقاف الفيديو — السيارة تتحرك</h2>
+    <p>رُصدت سرعة <strong id="mb-speed">—</strong> كم/س. أوقف السيارة وضعها في وضع الوقوف (P) قبل المتابعة.</p>
+  </div>
+</div>
+
+<div class="app" id="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"><svg><use href="#i-play"/></svg></span>
+      <div>
+        <div class="title">مختبر الفيديو <span class="tag">تجريبي</span></div>
+        <div class="sub">اختبار تشغيل YouTube في متصفح Tesla</div>
+      </div>
+    </div>
+    <div class="chips">
+      <span class="chip" id="chip-env">—</span>
+      <span class="chip" id="chip-net">—</span>
+      <span class="chip" id="chip-health" title="صحة التشغيل">—</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- ============ منطقة المشغّل ============ -->
+    <section class="stage" aria-label="المشغّل">
+      <div class="player-box" id="player-box">
+        <div id="player"></div>
+        <div class="placeholder" id="placeholder">
+          <div class="ph-icon"><svg><use href="#i-play"/></svg></div>
+          <p>الصق رابط فيديو YouTube أو اختر عيّنة اختبار من القائمة</p>
+          <p class="muted small">تذكير: الاختبار فقط والسيارة في وضع P</p>
+        </div>
+        <div class="buffering" id="buffering" hidden><span class="spinner"></span><span id="buf-text">جارٍ التحميل…</span></div>
+      </div>
+
+      <div class="controls" id="controls">
+        <div class="seek-row">
+          <span class="time" id="t-cur">0:00</span>
+          <input type="range" id="seek" min="0" max="1000" value="0" step="1" aria-label="موضع التشغيل" disabled>
+          <span class="time" id="t-dur">0:00</span>
+        </div>
+        <div class="btn-row">
+          <button class="cbtn" id="b-back" aria-label="رجوع 10 ثوانٍ" disabled><svg><use href="#i-back"/></svg><span>10</span></button>
+          <button class="cbtn main" id="b-play" aria-label="تشغيل/إيقاف" disabled><svg id="b-play-icon"><use href="#i-play"/></svg></button>
+          <button class="cbtn" id="b-fwd" aria-label="تقديم 10 ثوانٍ" disabled><svg><use href="#i-fwd"/></svg><span>10</span></button>
+          <span class="sep"></span>
+          <button class="cbtn" id="b-mute" aria-label="كتم" disabled><svg id="b-mute-icon"><use href="#i-vol"/></svg></button>
+          <select class="csel" dir="ltr" id="s-rate" aria-label="سرعة التشغيل" disabled>
+            <option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option>
+          </select>
+          <select class="csel" dir="ltr" id="s-quality" aria-label="الجودة المقترحة" title="الجودة المقترحة"></select>
+          <button class="cbtn" id="b-recover" aria-label="إنعاش التشغيل" title="إعادة تحميل المقطع من الموضع الحالي" disabled><svg><use href="#i-reload"/></svg></button>
+          <button class="cbtn" id="b-theater" aria-label="ملء الشاشة"><svg id="b-theater-icon"><use href="#i-expand"/></svg></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ اللوحة الجانبية ============ -->
+    <aside class="side" aria-label="لوحة التحكم">
+      <form id="url-form" class="url-form" autocomplete="off">
+        <input id="url-input" type="text" inputmode="url" placeholder="رابط YouTube أو معرّف الفيديو" aria-label="رابط الفيديو" dir="ltr">
+        <button class="btn primary" type="submit">تشغيل</button>
+      </form>
+      <div class="paste-row">
+        <button class="btn ghost sm" id="b-paste" type="button">لصق من الحافظة</button>
+        <button class="btn ghost sm" id="b-clear" type="button">مسح</button>
+      </div>
+
+      <nav class="tabs" role="tablist">
+        <button role="tab" class="tab active" data-tab="samples">عيّنات</button>
+        <button role="tab" class="tab" data-tab="history">السجل</button>
+        <button role="tab" class="tab" data-tab="diag">التشخيص</button>
+        <button role="tab" class="tab" data-tab="settings">الإعدادات</button>
+      </nav>
+
+      <div class="panel active" id="tab-samples" role="tabpanel">
+        <p class="muted small">مقاطع مختارة لاختبار سيناريوهات مختلفة: دقة عالية، 60 إطارًا، بث مباشر، ومقطع خفيف.</p>
+        <ul class="vlist" id="samples"></ul>
+      </div>
+
+      <div class="panel" id="tab-history" role="tabpanel">
+        <ul class="vlist" id="history"></ul>
+        <p class="muted small empty" id="history-empty">لا يوجد سجل بعد.</p>
+        <button class="btn ghost sm" id="b-history-clear" type="button">مسح السجل</button>
+      </div>
+
+      <div class="panel" id="tab-diag" role="tabpanel">
+        <h3>جلسة التشغيل الحالية</h3>
+        <dl class="kv" id="diag-session"></dl>
+        <h3>البيئة والمتصفح</h3>
+        <dl class="kv" id="diag-env"></dl>
+        <h3>دعم الميزات</h3>
+        <ul class="feat" id="diag-features"></ul>
+        <div class="diag-actions">
+          <button class="btn ghost sm" id="b-ping" type="button">قياس زمن الوصول لخوادم YouTube</button>
+          <button class="btn ghost sm" id="b-report" type="button">إنشاء تقرير اختبار</button>
+        </div>
+        <div id="report-box" hidden>
+          <textarea id="report" readonly dir="ltr" rows="10"></textarea>
+          <button class="btn ghost sm" id="b-copy" type="button">نسخ التقرير</button>
+        </div>
+        <h3>سجل الأحداث</h3>
+        <ol class="log" id="log" dir="ltr"></ol>
+      </div>
+
+      <div class="panel" id="tab-settings" role="tabpanel">
+        <div class="setting">
+          <label for="set-quality">الجودة المقترحة الافتراضية</label>
+          <select id="set-quality"></select>
+          <p class="hint">يحدّد YouTube الجودة الفعلية؛ هذا الخيار «اقتراح» فقط. الجودة الأقل = تقطيع أقل على الشبكات الضعيفة.</p>
+        </div>
+        <label class="toggle"><input type="checkbox" id="set-recover"> <span>الإنعاش التلقائي عند التجمّد أو التخزين المؤقت الطويل</span></label>
+        <div class="setting">
+          <label for="set-threshold">مهلة اكتشاف التجمّد: <strong id="set-threshold-v"></strong> ث</label>
+          <input type="range" id="set-threshold" min="2" max="12" step="1">
+        </div>
+        <label class="toggle"><input type="checkbox" id="set-downgrade"> <span>خفض الجودة تلقائيًا عند تكرار التقطيع</span></label>
+        <label class="toggle"><input type="checkbox" id="set-native"> <span>إظهار أدوات YouTube الأصلية داخل المشغل</span></label>
+        <label class="toggle"><input type="checkbox" id="set-nocookie"> <span>وضع الخصوصية (youtube-nocookie.com)</span></label>
+        <label class="toggle"><input type="checkbox" id="set-lite"> <span>الوضع الخفيف (بدون صور مصغّرة أو حركات)</span></label>
+        <label class="toggle"><input type="checkbox" id="set-motion"> <span>حارس الحركة: إيقاف الفيديو تلقائيًا إذا رُصدت حركة السيارة (يتطلب إذن الموقع الجغرافي)</span></label>
+        <p class="hint" id="motion-status"></p>
+        <p class="hint">تغيير «الأدوات الأصلية» أو «وضع الخصوصية» يُطبَّق عند تشغيل المقطع التالي.</p>
+        <hr>
+        <button class="btn ghost sm" id="b-show-dz" type="button">عرض إخلاء المسؤولية</button>
+        <button class="btn ghost sm" id="b-reset" type="button">استعادة الإعدادات الافتراضية</button>
+        <p class="muted small">الإصدار <span id="app-version"></span> · غير مرتبط بـ Tesla أو YouTube.</p>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
