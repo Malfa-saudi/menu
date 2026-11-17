@@ -154,3 +154,30 @@ hr{border:0;border-top:1px solid var(--line);margin:16px 0}
 /* المسرح يغلب تخطيط الشاشات الضيقة */
 .app.theater{height:calc(var(--vh) * 100);min-height:0}
 .app.theater .player-box{flex:1;height:auto;padding-top:0}
+
+/* ---------- الأوضاع: car / passenger ---------- */
+.mode-car [data-mode="passenger"],.mode-passenger [data-mode="car"]{display:none!important}
+.linkbtn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;color:inherit}
+.btn.primary.linkbtn{color:#fff}
+.resume{display:flex;align-items:center;flex-wrap:wrap;background:#14233f;border:1px solid #2b4170;border-radius:12px;padding:8px 12px;margin-top:10px}
+.resume-text{flex:1;min-width:160px;font-size:15px;margin-left:8px}
+.resume .btn.sm{margin:4px 0 4px 6px}
+
+/* جهاز الراكب: احترام حواف الشاشة (النتوء/الزوايا) وتخطيط مريح للجوال */
+.mode-passenger .app{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+.mode-passenger .app.theater{padding:0}
+@media (max-width:600px){
+  .layout{padding:10px;grid-gap:10px}
+  .topbar{padding:8px 12px}
+  .cbtn{min-width:48px;height:48px;margin:3px;padding:0 8px}
+  .csel{height:48px;min-width:70px;margin:3px}
+  .cbtn.main{min-width:68px}
+  .sep{width:2px}
+  .modal-card{padding:20px 18px}
+  .modal-card h1{font-size:22px}
+}
+/* الجوال بالعرض: الفيديو يملأ الارتفاع */
+@media (max-height:500px) and (orientation:landscape){
+  .topbar{display:none}
+  .player-box{padding-top:0;height:calc(var(--vh) * 100 - 140px);flex:none}
+}

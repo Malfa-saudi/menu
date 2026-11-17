@@ -8,8 +8,10 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.1.0';
+  var VERSION = '0.2.0';
   var DISCLAIMER_VERSION = '1';
+  // car = شاشة السيارة (الاختبار في وضع P فقط) · passenger = جهاز منفصل خاص بالراكب
+  var MODE = window.TVL_MODE === 'passenger' ? 'passenger' : 'car';
 
   // ---------------------------------------------------------------- أدوات
   function $(id) { return document.getElementById(id); }
@@ -111,7 +113,8 @@
       ['H.264', !!(window.MediaSource && MediaSource.isTypeSupported && MediaSource.isTypeSupported('video/mp4; codecs="avc1.42E01E"'))],
       ['CSS Grid', css('display', 'grid')],
       ['CSS Variables', css('--a', '0')],
-      ['Clipboard', !!(navigator.clipboard)]
+      ['Clipboard', !!(navigator.clipboard)],
+      ['Wake Lock', 'wakeLock' in navigator]
     ];
   }
 
@@ -120,11 +123,14 @@
 
   // ---------------------------------------------------------------- الإعدادات
   var DEFAULTS = {
-    quality: 'default', autoRecover: true, threshold: 4, autoDowngrade: true,
-    nativeControls: true, nocookie: false, lite: false, motionGuard: false
+    quality: 'default', autoRecover: true, threshold: MODE === 'passenger' ? 5 : 4, autoDowngrade: true,
+    nativeControls: true, nocookie: false, lite: false, motionGuard: false,
+    adaptiveNet: true, autoResume: true, keepAwake: true, autoFullscreen: MODE === 'passenger'
   };
-  var settings = Object.assign({}, DEFAULTS, store.get('settings', {}));
-  function saveSettings() { store.set('settings', settings); }
+  // إعدادات كل وضع منفصلة (مفتاح السيارة بقي كما هو للتوافق مع الإصدار السابق)
+  var SETTINGS_KEY = MODE === 'passenger' ? 'settings.passenger' : 'settings';
+  var settings = Object.assign({}, DEFAULTS, store.get(SETTINGS_KEY, {}));
+  function saveSettings() { store.set(SETTINGS_KEY, settings); }
 
   var QUALITIES = [
     ['default', 'تلقائي'], ['hd1080', '1080p'], ['hd720', '720p'],
@@ -272,6 +278,10 @@
     if (motionBlocked) { toast('الفيديو موقوف: السيارة تتحرك'); return; }
     current = { id: item.id || null, list: item.list || null, title: item.title || null, start: item.start || 0 };
     resetMetrics(current);
+    wantPlaying = true;
+    $('resume').hidden = true;
+    // يجب أن يُستدعى داخل لمسة المستخدم نفسها حتى يسمح المتصفح بملء الشاشة
+    if (MODE === 'passenger' && settings.autoFullscreen && !theater) setTheater(true);
     log('load ' + (current.id || '') + (current.list ? ' list=' + current.list : '') + (current.start ? ' t=' + current.start : ''));
     addHistory(current);
     renderSamples();
@@ -367,6 +377,10 @@
       if (d > 300) log('stall ended after ' + fmtMs(d), 'w');
     }
 
+    if (s === 1 || s === 3) keepAwake(true);
+    else if (s === 0 || s === 2) keepAwake(false);
+    if (s === 0) wantPlaying = false;
+
     if (s === 1) { // playing
       if (!M.firstPlay) {
         M.firstPlay = true;
@@ -384,7 +398,7 @@
       if (M.firstPlay) {
         M.stalls++;
         M.stallStart = now();
-        showBuffering(true, 'تخزين مؤقت…');
+        showBuffering(true, navigator.onLine ? 'تخزين مؤقت…' : 'انقطع الاتصال — سيُستأنف التشغيل تلقائيًا');
       } else {
         showBuffering(true, 'جارٍ التحميل…');
       }
@@ -432,6 +446,10 @@
     if (!player || !playerReady || !M) return;
     var state, t;
     try { state = player.getPlayerState(); t = player.getCurrentTime(); } catch (e) { return; }
+
+    // أثناء انقطاع الشبكة لا فائدة من الإنعاش؛ ننتظر عودة الاتصال ثم نستأنف (انظر onOnline)
+    if (!navigator.onLine) { M.lastTime = t; updateProgress(); return; }
+    if (state === 1) savePosition(t);
 
     if (state === 1) {
       // الوقت لا يتقدّم رغم أن الحالة «تشغيل» = تجمّد صامت
@@ -612,7 +630,13 @@
       ['تغييرات الجودة', M ? M.qualityChanges : '—'],
       ['المحمَّل مسبقًا', loaded],
       ['أخطاء', M && M.errors.length ? M.errors.map(function (x) { return x.code; }).join(', ') : '0'],
-      ['معدّل إطارات الواجهة', fps ? fps + ' fps' : '—']
+      ['معدّل إطارات الواجهة', fps ? fps + ' fps' : '—'],
+      ['الوضع', MODE === 'passenger' ? 'شاشة الراكب' : 'شاشة السيارة'],
+      ['انقطاعات الشبكة', NET.offlineCount + (NET.offlineCount ? ' (إجمالي ' + fmtMs(NET.offlineMs) + ')' : '')],
+      ['تبدّلات الشبكة', NET.changes],
+      ['استئناف تلقائي', NET.resumes],
+      ['الجودة التكيّفية', dynamicQuality ? QUALITY_LABEL[dynamicQuality] : 'تلقائي'],
+      ['إبقاء الشاشة مضاءة', !('wakeLock' in navigator) ? 'غير مدعوم' : (wakeLock ? 'مفعّل' : 'غير نشط')]
     ]);
   }
   function renderDiagEnv() {
@@ -638,7 +662,8 @@
   function renderChips() {
     var env = detectEnv();
     var ce = $('chip-env');
-    if (env.isTesla) { ce.textContent = 'Tesla ' + (env.teslaVersion || ''); ce.className = 'chip ok'; }
+    if (MODE === 'passenger') { ce.textContent = 'شاشة الراكب' + (/iPad|Android|Mobile/.test(env.ua) ? ' · جهاز لوحي/جوال' : ''); ce.className = 'chip ok'; }
+    else if (env.isTesla) { ce.textContent = 'Tesla ' + (env.teslaVersion || ''); ce.className = 'chip ok'; }
     else { ce.textContent = 'متصفح غير Tesla' + (env.chromeMajor ? ' · Chrome ' + env.chromeMajor : ''); ce.className = 'chip'; }
     var cn = $('chip-net');
     if (!navigator.onLine) { cn.textContent = 'غير متصل'; cn.className = 'chip bad'; }
@@ -687,13 +712,18 @@
 
   function buildReport() {
     var r = {
-      app: 'tesla-video-lab', version: VERSION, generatedAt: new Date().toISOString(),
+      app: 'tesla-video-lab', version: VERSION, mode: MODE, generatedAt: new Date().toISOString(),
       env: detectEnv(), settings: settings, video: current,
       metrics: M ? {
         startupMs: M.startupMs && Math.round(M.startupMs), stalls: M.stalls, stallMs: Math.round(M.stallMs),
         longestStallMs: Math.round(M.longestStallMs), recoveries: M.recoveries, downgrades: M.downgrades,
         qualityChanges: M.qualityChanges, qualityHistory: M.qualityHistory, errors: M.errors, state: M.state
       } : null,
+      network: {
+        offlineCount: NET.offlineCount, offlineMs: Math.round(NET.offlineMs), longestOfflineMs: Math.round(NET.longestOfflineMs),
+        connectionChanges: NET.changes, autoResumes: NET.resumes, adaptiveQuality: NET.adaptiveSet
+      },
+      wakeLock: { supported: 'wakeLock' in navigator, active: !!wakeLock },
       ping: pingResult, uiFps: fps || null,
       events: events.slice(-80)
     };
@@ -750,24 +780,158 @@
     log('motion guard: vehicle stopped');
   }
 
+  // ---------------------------------------------------------------- تحمّل الشبكة (للتنقل بالشبكة الخلوية)
+  var wantPlaying = false;
+  var NET = { offlineCount: 0, offlineMs: 0, offlineSince: null, longestOfflineMs: 0, changes: 0, resumes: 0, adaptiveSet: [] };
+
+  function onOffline() {
+    if (NET.offlineSince != null) return;
+    NET.offlineSince = now();
+    NET.offlineCount++;
+    log('network offline', 'w');
+    if (player && playerReady) { try { savePosition(player.getCurrentTime(), true); } catch (e) { } }
+    showBuffering(true, 'انقطع الاتصال — سيُستأنف التشغيل تلقائيًا');
+    renderChips();
+  }
+  function onOnline() {
+    if (NET.offlineSince != null) {
+      var d = now() - NET.offlineSince;
+      NET.offlineMs += d; if (d > NET.longestOfflineMs) NET.longestOfflineMs = d;
+      NET.offlineSince = null;
+      log('network back after ' + fmtMs(d));
+    }
+    renderChips();
+    if (settings.adaptiveNet) applyAdaptiveQuality('online');
+    if (!settings.autoResume || !player || !playerReady || !current || !wantPlaying) { showBuffering(false); return; }
+    // نمهل المشغل ثانيتين ليستأنف وحده، وإلا نعيد تحميل المقطع من آخر موضع محفوظ
+    setTimeout(function () {
+      var st = -1;
+      try { st = player.getPlayerState(); } catch (e) { }
+      if (st === 1) { showBuffering(false); return; }
+      var pos = lastPos && current.id && lastPos.id === current.id ? lastPos.t : null;
+      NET.resumes++;
+      log('auto-resume after reconnect at ' + (pos == null ? '?' : pos.toFixed(1) + 's'), 'w');
+      if (current.id && !current.list && pos != null) {
+        player.loadVideoById({ videoId: current.id, startSeconds: Math.max(0, pos - 2), suggestedQuality: currentSuggested() });
+      } else {
+        player.playVideo();
+      }
+      toast('عاد الاتصال — تم استئناف التشغيل');
+    }, 2000);
+  }
+  function onConnectionChange() {
+    NET.changes++;
+    var c = navigator.connection || {};
+    log('connection → ' + (c.effectiveType || '?') + (c.downlink != null ? ' ' + c.downlink + 'Mbps' : '') + (c.rtt != null ? ' rtt ' + c.rtt : ''));
+    renderChips();
+    if (settings.adaptiveNet) applyAdaptiveQuality('change');
+  }
+
+  // اختيار جودة مناسبة لنوع الشبكة. ملاحظة: Safari (iPad/iPhone) لا يوفّر هذه المعلومات،
+  // فيُعتمد هناك على خفض الجودة عند التقطيع فقط.
+  function networkQuality() {
+    var c = navigator.connection;
+    if (!c || !c.effectiveType) return undefined;
+    if (c.saveData) return 'medium';
+    if (c.effectiveType === 'slow-2g' || c.effectiveType === '2g') return 'small';
+    if (c.effectiveType === '3g') return 'medium';
+    if (c.downlink != null) {
+      if (c.downlink >= 8) return null;       // سريعة: تلقائي
+      if (c.downlink >= 3) return 'hd720';
+      return 'large';
+    }
+    return null;
+  }
+  var userPickedQuality = false;
+  function applyAdaptiveQuality(why) {
+    if (userPickedQuality) return;
+    var q = networkQuality();
+    if (q === undefined) return;
+    var target = q || (settings.quality !== 'default' ? settings.quality : null);
+    if ((target || null) === (dynamicQuality || null)) return;
+    dynamicQuality = target;
+    NET.adaptiveSet.push({ at: ((Date.now() - t0) / 1000).toFixed(0), q: target || 'auto', why: why });
+    log('adaptive quality (' + why + ') → ' + (target ? QUALITY_LABEL[target] : 'auto'));
+    suggestQuality(target || 'default');
+    syncQualitySelect();
+  }
+
+  // حفظ موضع التشغيل كل 5 ثوانٍ لاستئنافه بعد انقطاع الشبكة أو إعادة تحميل الصفحة
+  var lastPos = store.get('resume', null), lastPosSaved = 0;
+  function savePosition(t, force) {
+    if (!settings.autoResume || !current || !current.id || current.list) return;
+    var d = 0;
+    try { d = player.getDuration() || 0; } catch (e) { }
+    lastPos = { id: current.id, t: t, title: current.title, ts: Date.now(), live: !d };
+    if (!force && Date.now() - lastPosSaved < 5000) return;
+    lastPosSaved = Date.now();
+    // لا نعرض الاستئناف للبث المباشر أو إذا اقترب المقطع من نهايته
+    if (!d || t > d - 15) store.set('resume', null);
+    else store.set('resume', lastPos);
+  }
+  function offerResume() {
+    var r = store.get('resume', null);
+    if (!settings.autoResume || !r || !r.id || r.t < 10 || Date.now() - r.ts > 12 * 3600 * 1000) return;
+    $('resume-title').textContent = r.title || r.id;
+    $('resume-time').textContent = fmtTime(r.t);
+    $('resume').hidden = false;
+    on($('b-resume'), 'click', function () { play({ id: r.id, title: r.title, start: Math.floor(r.t) }); });
+    on($('b-resume-x'), 'click', function () { $('resume').hidden = true; store.set('resume', null); });
+  }
+
+  // إبقاء الشاشة مضاءة (Screen Wake Lock API) — مهم للتابلت حتى لا ينطفئ أثناء المشاهدة
+  var wakeLock = null, wakePending = false;
+  function keepAwake(onOff) {
+    if (!('wakeLock' in navigator)) return;
+    if (onOff && settings.keepAwake && !wakeLock && !wakePending && document.visibilityState === 'visible') {
+      wakePending = true;
+      navigator.wakeLock.request('screen').then(function (l) {
+        wakePending = false; wakeLock = l;
+        l.addEventListener('release', function () { wakeLock = null; });
+      }).catch(function () { wakePending = false; });
+    } else if (!onOff && wakeLock) {
+      try { wakeLock.release(); } catch (e) { }
+      wakeLock = null;
+    }
+  }
+  function onVisibility() {
+    if (document.visibilityState !== 'visible' || !player || !playerReady) return;
+    var st = -1;
+    try { st = player.getPlayerState(); } catch (e) { }
+    if (st === 1 || st === 3) keepAwake(true);
+  }
+
   // ---------------------------------------------------------------- إخلاء المسؤولية
   function showDisclaimer() {
     var dz = $('disclaimer');
-    $('dz-c1').checked = false; $('dz-c2').checked = false;
+    dzBoxes().forEach(function (b) { b.checked = false; });
     $('dz-accept').disabled = true;
     dz.hidden = false;
     setTimeout(function () { try { $('dz-c1').focus(); } catch (e) { } }, 50);
     if (player && playerReady) { try { player.pauseVideo(); } catch (e) { } }
   }
+  // خانات التعهّد الظاهرة في الوضع الحالي فقط
+  function dzBoxes() {
+    return Array.prototype.filter.call(document.querySelectorAll('.dz-c'), function (b) {
+      var m = b.closest('[data-mode]');
+      return !m || m.getAttribute('data-mode') === MODE;
+    });
+  }
+  function dzAllChecked() { return dzBoxes().every(function (b) { return b.checked; }); }
   function initDisclaimer() {
-    function upd() { $('dz-accept').disabled = !($('dz-c1').checked && $('dz-c2').checked); }
-    on($('dz-c1'), 'change', upd);
-    on($('dz-c2'), 'change', upd);
+    // وضع الراكب مخصّص لجهاز منفصل: لا يعمل داخل متصفح السيارة
+    if (MODE === 'passenger' && detectEnv().isTesla) {
+      $('wrong-device').hidden = false;
+      log('passenger mode opened in Tesla browser — blocked', 'w');
+      return false;
+    }
+    function upd() { $('dz-accept').disabled = !dzAllChecked(); }
+    dzBoxes().forEach(function (b) { on(b, 'change', upd); });
     on($('dz-accept'), 'click', function () {
-      if (!($('dz-c1').checked && $('dz-c2').checked)) return;
-      session.set('dz', DISCLAIMER_VERSION);
+      if (!dzAllChecked()) return;
+      session.set('dz.' + MODE, DISCLAIMER_VERSION);
       var acc = store.get('dz-log', []);
-      acc.push(new Date().toISOString());
+      acc.push(MODE + ' ' + new Date().toISOString());
       store.set('dz-log', acc.slice(-20));
       $('disclaimer').hidden = true;
       log('disclaimer accepted');
@@ -777,8 +941,9 @@
       if (window.history.length > 1) window.history.back();
       else location.href = 'about:blank';
     });
-    if (session.get('dz') !== DISCLAIMER_VERSION) showDisclaimer();
+    if (session.get('dz.' + MODE) !== DISCLAIMER_VERSION) showDisclaimer();
     else loadApi().catch(function () { });
+    return true;
   }
 
   // ---------------------------------------------------------------- الربط
@@ -793,6 +958,10 @@
     $('set-nocookie').checked = settings.nocookie;
     $('set-lite').checked = settings.lite;
     $('set-motion').checked = settings.motionGuard;
+    $('set-adaptive').checked = settings.adaptiveNet;
+    $('set-resume').checked = settings.autoResume;
+    $('set-awake').checked = settings.keepAwake;
+    $('set-autofs').checked = settings.autoFullscreen;
     document.body.classList.toggle('lite', settings.lite);
   }
 
@@ -802,15 +971,18 @@
     on(window, 'orientationchange', setVh);
     $('app-version').textContent = VERSION;
 
-    initDisclaimer();
+    var allowed = initDisclaimer();
     bindSettings();
     renderSamples();
     renderHistory();
     renderChips();
     updateHealth();
-    on(window, 'online', renderChips);
-    on(window, 'offline', renderChips);
-    if (navigator.connection && navigator.connection.addEventListener) navigator.connection.addEventListener('change', renderChips);
+    on(window, 'online', onOnline);
+    on(window, 'offline', onOffline);
+    on(document, 'visibilitychange', onVisibility);
+    if (navigator.connection && navigator.connection.addEventListener) navigator.connection.addEventListener('change', onConnectionChange);
+    if (settings.adaptiveNet) applyAdaptiveQuality('start');
+    if (allowed) offerResume();
 
     // الإدخال
     on($('url-form'), 'submit', function (e) {
@@ -841,13 +1013,14 @@
     on($('b-play'), 'click', function () {
       if (!player || !playerReady) return;
       var s = player.getPlayerState();
-      if (s === 1 || s === 3) player.pauseVideo(); else player.playVideo();
+      if (s === 1 || s === 3) { wantPlaying = false; player.pauseVideo(); } else { wantPlaying = true; player.playVideo(); }
     });
     on($('b-back'), 'click', function () { if (playerReady) player.seekTo(Math.max(0, player.getCurrentTime() - 10), true); });
     on($('b-fwd'), 'click', function () { if (playerReady) player.seekTo(player.getCurrentTime() + 10, true); });
     on($('b-mute'), 'click', function () { muted = !muted; store.set('muted', muted); applyMute(); });
     on($('s-rate'), 'change', function () { if (playerReady) player.setPlaybackRate(parseFloat(this.value)); });
     on($('s-quality'), 'change', function () {
+      userPickedQuality = this.value !== 'default';   // اختيار المستخدم يتقدّم على الجودة التكيّفية
       dynamicQuality = this.value === 'default' ? null : this.value;
       suggestQuality(this.value === 'default' ? 'default' : this.value);
       log('user quality → ' + (QUALITY_LABEL[this.value] || this.value));
@@ -896,10 +1069,14 @@
     on($('set-native'), 'change', function () { settings.nativeControls = this.checked; saveSettings(); });
     on($('set-nocookie'), 'change', function () { settings.nocookie = this.checked; saveSettings(); });
     on($('set-lite'), 'change', function () { settings.lite = this.checked; saveSettings(); document.body.classList.toggle('lite', settings.lite); });
+    on($('set-adaptive'), 'change', function () { settings.adaptiveNet = this.checked; saveSettings(); if (this.checked) applyAdaptiveQuality('setting'); });
+    on($('set-resume'), 'change', function () { settings.autoResume = this.checked; saveSettings(); if (!this.checked) store.set('resume', null); });
+    on($('set-awake'), 'change', function () { settings.keepAwake = this.checked; saveSettings(); keepAwake(this.checked && player && playerReady && player.getPlayerState() === 1); });
+    on($('set-autofs'), 'change', function () { settings.autoFullscreen = this.checked; saveSettings(); });
     on($('set-motion'), 'change', function () { settings.motionGuard = this.checked; saveSettings(); setMotionGuard(this.checked); });
     on($('b-show-dz'), 'click', showDisclaimer);
     on($('b-reset'), 'click', function () {
-      settings = Object.assign({}, DEFAULTS); saveSettings(); bindSettings(); setMotionGuard(false); toast('تمت استعادة الإعدادات الافتراضية');
+      settings = Object.assign({}, DEFAULTS); saveSettings(); bindSettings(); setMotionGuard(false); userPickedQuality = false; toast('تمت استعادة الإعدادات الافتراضية');
     });
     on($('b-history-clear'), 'click', function () { history = []; store.set('history', history); renderHistory(); });
 
@@ -908,7 +1085,7 @@
     on($('b-report'), 'click', function () { $('report-box').hidden = false; $('report').value = buildReport(); });
     on($('b-copy'), 'click', function () { copyText($('report').value, $('report')); });
 
-    if (settings.motionGuard) setMotionGuard(true);
+    if (settings.motionGuard && MODE === 'car') setMotionGuard(true);
 
     // دعم الروابط المباشرة: ?v=ID أو ?url=...
     var qs = new URLSearchParams(location.search);
@@ -919,7 +1096,7 @@
     if ('serviceWorker' in navigator && location.protocol === 'https:') {
       navigator.serviceWorker.register('sw.js').catch(function (e) { log('SW: ' + e.message, 'w'); });
     }
-    log('app ' + VERSION + ' ready · ' + (detectEnv().isTesla ? 'Tesla browser' : 'non-Tesla browser'));
+    log('app ' + VERSION + ' ready · mode=' + MODE + ' · ' + (detectEnv().isTesla ? 'Tesla browser' : 'non-Tesla browser'));
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
