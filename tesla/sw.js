@@ -1,7 +1,7 @@
 /* Service Worker: يخزّن واجهة الموقع فقط (وليس الفيديو) لفتح أسرع في المرات التالية.
    استراتيجية stale-while-revalidate لملفات الموقع نفسه، وتجاهل كل طلبات YouTube. */
-var CACHE = 'tvl-shell-v1';
-var SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest'];
+var CACHE = 'tvl-shell-v2';
+var SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest', 'manifest-passenger.webmanifest'];
 
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); }));
